@@ -22,6 +22,16 @@ export const MOROCCO_CITIES: City[] = [
         description: 'The golden hour lighting hitting the minaret.',
         locationName: 'Marrakech',
         coords: [31.6237, -7.9936]
+      },
+      {
+        id: 'm2',
+        url: 'https://images.unsplash.com/photo-1539667468225-8df6675ca531?auto=format&fit=crop&q=80&w=1200',
+        title: 'Traditional Tanjiya',
+        titleAr: 'طباخ الطنجية التقليدي',
+        titleFr: 'Cuisinier de Tanjiya',
+        description: 'Traditional cooking in the heart of Marrakech Medina.',
+        locationName: 'Marrakech',
+        coords: [31.6260, -7.9890]
       }
     ]
   },
@@ -68,52 +78,6 @@ export const MOROCCO_CITIES: City[] = [
         description: 'Shadows playing across the crest of Erg Chebbi.',
         locationName: 'Sahara Desert',
         coords: [31.1044, -3.9612]
-      }
-    ]
-  },
-  {
-    id: 'fes',
-    name: 'Fes',
-    nameAr: 'فاس',
-    nameFr: 'Fès',
-    description: 'The spiritual heart of Morocco with the world\'s oldest university.',
-    descriptionAr: 'القلب الروحي للمغرب وموطن أقدم جامعة في العالم.',
-    descriptionFr: 'Le cœur spirituel du Maroc avec la plus ancienne université du monde.',
-    center: [34.0331, -5.0003],
-    zoom: 13,
-    photos: [
-      {
-        id: 'f1',
-        url: 'https://images.unsplash.com/photo-1512444590552-0407a510f279?auto=format&fit=crop&q=80&w=1200',
-        title: 'Tannery Colors',
-        titleAr: 'ألوان الدباغة',
-        titleFr: 'Couleurs de la Tannerie',
-        description: 'The historic Chouara Tannery from above.',
-        locationName: 'Fes',
-        coords: [34.0664, -4.9723]
-      }
-    ]
-  },
-  {
-    id: 'casablanca',
-    name: 'Casablanca',
-    nameAr: 'الدار البيضاء',
-    nameFr: 'Casablanca',
-    description: 'A modern metropolis blending Art Deco and Islamic architecture.',
-    descriptionAr: 'حاضرة حديثة تمزج بين الفن الزخرفي والعمارة الإسلامية.',
-    descriptionFr: 'Une métropole moderne mêlant Art Déco et architecture islamique.',
-    center: [33.5731, -7.5898],
-    zoom: 12,
-    photos: [
-      {
-        id: 'cb1',
-        url: 'https://images.unsplash.com/photo-1544085311-11a028465b03?auto=format&fit=crop&q=80&w=1200',
-        title: 'Hassan II Mosque',
-        titleAr: 'مسجد الحسن الثاني',
-        titleFr: 'Mosquée Hassan II',
-        description: 'The landmark mosque overlooking the Atlantic Ocean.',
-        locationName: 'Casablanca',
-        coords: [33.6085, -7.6327]
       }
     ]
   }

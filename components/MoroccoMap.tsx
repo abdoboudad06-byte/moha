@@ -32,6 +32,7 @@ const customPhotoIcon = new L.Icon({
 interface MoroccoMapProps {
   selectedCity: City | null;
   customPhotos: Photo[];
+  deletedDefaultIds: Set<string>;
   onSelectCity: (city: City) => void;
   onSelectPhoto: (photo: Photo) => void;
 }
@@ -44,7 +45,7 @@ const MapUpdater = ({ center, zoom }: { center: [number, number], zoom: number }
   return null;
 };
 
-const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, onSelectCity, onSelectPhoto }) => {
+const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, deletedDefaultIds, onSelectCity, onSelectPhoto }) => {
   const defaultCenter: [number, number] = [31.7917, -7.0926];
   const defaultZoom = 6;
 
@@ -53,9 +54,9 @@ const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, onS
     ? customPhotos.filter(p => p.locationName === selectedCity.name)
     : [];
 
-  // All photos to show for the current context
+  // All photos to show for the current context (filtering out blacklisted ones)
   const displayedPhotos = selectedCity 
-    ? [...selectedCity.photos, ...currentCityCustomPhotos]
+    ? [...selectedCity.photos.filter(p => !deletedDefaultIds.has(p.id)), ...currentCityCustomPhotos]
     : [];
 
   return (

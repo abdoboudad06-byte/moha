@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MOROCCO_CITIES } from './data/moroccoContent';
 import { City, Photo, Language } from './types';
 import { translations } from './data/translations';
@@ -7,7 +7,7 @@ import MoroccoMap from './components/MoroccoMap';
 import PhotoDetail from './components/PhotoDetail';
 import UploadModal from './components/UploadModal';
 import LoginModal from './components/LoginModal';
-import { Camera, Map as MapIcon, ChevronDown, Instagram, Mail, LayoutGrid, Award, MapPin, ArrowRight, Lock, Unlock, Plus, Trash2, ArrowLeft, Filter, Image as ImageIcon, Sparkle, LogOut, Settings, Globe, Facebook, MessageCircle } from 'lucide-react';
+import { Camera, Map as MapIcon, ChevronDown, Instagram, Mail, LayoutGrid, Award, MapPin, ArrowRight, Lock, Unlock, Plus, Trash2, ArrowLeft, Filter, Image as ImageIcon, Sparkle, LogOut, Settings, Globe, Facebook, MessageCircle, Eraser } from 'lucide-react';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('ar');
@@ -15,7 +15,8 @@ const App: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [customPhotos, setCustomPhotos] = useState<Photo[]>([]);
-  const [purchasedPhotoIds, setPurchasedPhotoIds] = useState<Set<string>>(new Set());
+  const [deletedDefaultIds, setDeletedDefaultIds] = useState<string[]>([]);
+  const [purchasedPhotoIds, setPurchasedPhotoIds] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -41,9 +42,18 @@ const App: React.FC = () => {
     const savedPurchases = localStorage.getItem('el_habassi_purchases');
     if (savedPurchases) {
       try {
-        setPurchasedPhotoIds(new Set(JSON.parse(savedPurchases)));
+        setPurchasedPhotoIds(JSON.parse(savedPurchases));
       } catch (e) {
         console.error("Failed to load purchases");
+      }
+    }
+
+    const savedDeletedIds = localStorage.getItem('el_habassi_deleted_defaults');
+    if (savedDeletedIds) {
+      try {
+        setDeletedDefaultIds(JSON.parse(savedDeletedIds));
+      } catch (e) {
+        console.error("Failed to load deleted IDs");
       }
     }
     
@@ -61,26 +71,59 @@ const App: React.FC = () => {
   };
 
   const handlePurchase = (id: string) => {
-    const newPurchases = new Set(purchasedPhotoIds);
-    newPurchases.add(id);
-    setPurchasedPhotoIds(newPurchases);
-    localStorage.setItem('el_habassi_purchases', JSON.stringify(Array.from(newPurchases)));
+    setPurchasedPhotoIds(prev => {
+      const updated = [...prev, id];
+      localStorage.setItem('el_habassi_purchases', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const handleUpload = (newPhoto: Photo) => {
-    const updated = [newPhoto, ...customPhotos];
-    setCustomPhotos(updated);
-    localStorage.setItem('el_habassi_custom_photos', JSON.stringify(updated));
+    setCustomPhotos(prev => {
+      const updated = [newPhoto, ...prev];
+      localStorage.setItem('el_habassi_custom_photos', JSON.stringify(updated));
+      return updated;
+    });
     setView('portfolio');
   };
 
-  const deletePhoto = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const deletePhoto = useCallback((id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (!isAdmin) return;
-    if (!window.confirm("هل أنت متأكد من حذف هذه الصورة؟")) return;
-    const updated = customPhotos.filter(p => p.id !== id);
-    setCustomPhotos(updated);
-    localStorage.setItem('el_habassi_custom_photos', JSON.stringify(updated));
+    
+    const confirmMsg = isRtl ? "هل أنت متأكد من حذف هذه الصورة؟" : "Are you sure you want to delete this photo?";
+    if (!window.confirm(confirmMsg)) return;
+
+    if (id.startsWith('custom')) {
+      setCustomPhotos(prev => {
+        const updated = prev.filter(p => p.id !== id);
+        localStorage.setItem('el_habassi_custom_photos', JSON.stringify(updated));
+        return updated;
+      });
+    } else {
+      setDeletedDefaultIds(prev => {
+        if (prev.includes(id)) return prev;
+        const updated = [...prev, id];
+        localStorage.setItem('el_habassi_deleted_defaults', JSON.stringify(updated));
+        return updated;
+      });
+    }
+    
+    setSelectedPhoto(prev => (prev?.id === id ? null : prev));
+  }, [isAdmin, isRtl]);
+
+  const clearAllDefaults = () => {
+    if (!isAdmin) return;
+    const confirmMsg = isRtl ? "هل أنت متأكد من حذف جميع صور النظام والابقاء فقط على صورك؟" : "Are you sure you want to delete all system photos and keep only yours?";
+    if (!window.confirm(confirmMsg)) return;
+
+    const allDefaultIds = MOROCCO_CITIES.flatMap(city => city.photos.map(p => p.id));
+    setDeletedDefaultIds(allDefaultIds);
+    localStorage.setItem('el_habassi_deleted_defaults', JSON.stringify(allDefaultIds));
   };
 
   const onAdminLoginSuccess = () => {
@@ -91,7 +134,7 @@ const App: React.FC = () => {
 
   const handleAdminToggle = () => {
     if (isAdmin) {
-      if (window.confirm("هل تريد الخروج؟")) {
+      if (window.confirm(isRtl ? "هل تريد الخروج؟" : "Do you want to logout?")) {
         setIsAdmin(false);
         localStorage.removeItem('el_habassi_admin_auth');
       }
@@ -100,14 +143,20 @@ const App: React.FC = () => {
     }
   };
 
-  const allPhotos = [
-    ...customPhotos,
-    ...MOROCCO_CITIES.flatMap(city => city.photos)
-  ];
+  const activeDefaultPhotos = useMemo(() => 
+    MOROCCO_CITIES.flatMap(city => city.photos)
+      .filter(p => !deletedDefaultIds.includes(p.id)),
+    [deletedDefaultIds]
+  );
 
-  const filteredPhotos = filterCity === 'all' 
-    ? allPhotos 
-    : allPhotos.filter(p => p.locationName === filterCity);
+  const allPhotos = useMemo(() => [...customPhotos, ...activeDefaultPhotos], [customPhotos, activeDefaultPhotos]);
+
+  const filteredPhotos = useMemo(() => 
+    filterCity === 'all' 
+      ? allPhotos 
+      : allPhotos.filter(p => p.locationName === filterCity),
+    [allPhotos, filterCity]
+  );
 
   const navigateToPortfolio = (e?: React.MouseEvent) => {
     e?.preventDefault();
@@ -130,8 +179,16 @@ const App: React.FC = () => {
     <div className={`min-h-screen bg-[#FCFBF7] text-stone-900 font-sans selection:bg-amber-200 transition-all duration-300`} dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Admin Status Bar */}
       {isAdmin && (
-        <div className="bg-amber-600 text-white text-[10px] font-bold uppercase tracking-[0.2em] py-2 text-center fixed top-0 w-full z-[110] flex items-center justify-center gap-2 shadow-lg">
-          <Settings size={12} className="animate-spin-slow" /> Management Mode Active - Mohamed El Habassi
+        <div className="bg-amber-600 text-white text-[10px] font-bold uppercase tracking-[0.2em] py-2 text-center fixed top-0 w-full z-[110] flex items-center justify-between px-6 shadow-lg">
+          <div className="flex items-center gap-2">
+            <Settings size={12} className="animate-spin-slow" /> {t.adminPortal} - Mohamed El Habassi
+          </div>
+          <button 
+            onClick={clearAllDefaults}
+            className="flex items-center gap-1 bg-white/20 hover:bg-white/40 px-3 py-1 rounded transition"
+          >
+            <Eraser size={12} /> {t.clearDefaults}
+          </button>
         </div>
       )}
 
@@ -177,7 +234,6 @@ const App: React.FC = () => {
 
       {view === 'landing' ? (
         <>
-          {/* Hero Section */}
           <section className="relative h-screen flex items-center justify-center overflow-hidden">
             <div className="absolute inset-0 z-0">
               <img 
@@ -187,7 +243,6 @@ const App: React.FC = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-transparent"></div>
             </div>
-            
             <div className="relative z-10 text-center text-white px-4 max-w-4xl fade-in-section">
               <span className="text-xs md:text-sm font-bold uppercase tracking-[0.6em] mb-4 block opacity-80">Professional Visual Storyteller</span>
               <h2 className="text-5xl md:text-8xl font-serif mb-6 leading-tight">
@@ -205,28 +260,6 @@ const App: React.FC = () => {
             </div>
           </section>
 
-          {/* Social Media Highlight Section */}
-          <section className="py-24 bg-white">
-            <div className="max-w-7xl mx-auto px-6 text-center">
-              <h3 className="text-sm font-bold uppercase tracking-[0.4em] text-amber-600 mb-8">Connect With Mohamed</h3>
-              <div className="flex justify-center gap-12">
-                <a href="#" className="flex flex-col items-center gap-3 group">
-                   <div className="w-16 h-16 rounded-2xl bg-stone-50 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all duration-300 shadow-sm"><Instagram size={28} /></div>
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 group-hover:text-stone-900 transition">Instagram</span>
-                </a>
-                <a href="#" className="flex flex-col items-center gap-3 group">
-                   <div className="w-16 h-16 rounded-2xl bg-stone-50 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all duration-300 shadow-sm"><Facebook size={28} /></div>
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 group-hover:text-stone-900 transition">Facebook</span>
-                </a>
-                <a href="#" className="flex flex-col items-center gap-3 group">
-                   <div className="w-16 h-16 rounded-2xl bg-stone-50 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all duration-300 shadow-sm"><MessageCircle size={28} /></div>
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-stone-400 group-hover:text-stone-900 transition">WhatsApp</span>
-                </a>
-              </div>
-            </div>
-          </section>
-
-          {/* Highlights Grid */}
           <section id="gallery" className="py-32 px-6 max-w-7xl mx-auto">
             <header className="mb-20 flex justify-between items-end">
               <div>
@@ -250,25 +283,32 @@ const App: React.FC = () => {
                 >
                   <div className="aspect-square overflow-hidden relative">
                     <img src={photo.url} alt={photo.title} className="w-full h-full object-cover transform group-hover:scale-110 transition duration-1000" />
-                    
-                    {/* Watermark in Grid */}
-                    {!purchasedPhotoIds.has(photo.id) && (
+                    {!purchasedPhotoIds.includes(photo.id) && (
                       <div className="absolute inset-0 opacity-20 pointer-events-none flex items-center justify-center rotate-[-30deg]">
                         <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 px-2">© El Habassi</span>
                       </div>
                     )}
                   </div>
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8 text-white">
-                    <h4 className="text-2xl font-serif">
-                      {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
-                    </h4>
+                    <div className="flex justify-between items-end w-full">
+                      <h4 className="text-2xl font-serif">
+                        {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
+                      </h4>
+                      {isAdmin && (
+                        <button 
+                          onClick={(e) => deletePhoto(photo.id, e)}
+                          className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-lg mb-2 z-20"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* Map */}
           <section id="map" className="py-32 bg-stone-900 text-white relative">
             <div className="max-w-7xl mx-auto px-6 mb-16">
               <span className="text-amber-500 font-bold uppercase tracking-[0.4em] text-xs mb-4 block">{t.interactiveJourney}</span>
@@ -279,6 +319,7 @@ const App: React.FC = () => {
                 <MoroccoMap 
                   selectedCity={selectedCity} 
                   customPhotos={customPhotos}
+                  deletedDefaultIds={new Set(deletedDefaultIds)}
                   onSelectCity={setSelectedCity} 
                   onSelectPhoto={setSelectedPhoto} 
                 />
@@ -287,7 +328,6 @@ const App: React.FC = () => {
           </section>
         </>
       ) : (
-        /* Full Portfolio Page View - Uniform Grid Layout */
         <section className="pt-40 pb-32 px-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
           <header className="mb-16 border-b border-stone-100 pb-12">
             <button onClick={navigateToHome} className="flex items-center gap-2 text-stone-400 hover:text-stone-900 transition font-bold text-xs uppercase tracking-widest mb-12">
@@ -298,7 +338,6 @@ const App: React.FC = () => {
                 <h2 className="text-5xl md:text-7xl font-serif mb-4">{t.completePortfolio}</h2>
                 <p className="text-stone-400 text-lg">{t.desc}</p>
               </div>
-              
               <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-3 bg-stone-50 px-4 py-2 rounded-full border border-stone-100">
                   <Filter size={14} className="text-stone-400" />
@@ -328,14 +367,6 @@ const App: React.FC = () => {
                 onClick={() => setSelectedPhoto(photo)}
               >
                 <img src={photo.url} alt={photo.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                
-                {/* Watermark in Portfolio Grid */}
-                {!purchasedPhotoIds.has(photo.id) && (
-                  <div className="absolute inset-0 opacity-10 pointer-events-none flex items-center justify-center rotate-[-45deg] overflow-hidden">
-                    <span className="text-[14px] font-black uppercase tracking-[1em] whitespace-nowrap">Mohamed El Habassi Mohamed El Habassi</span>
-                  </div>
-                )}
-
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-8 flex flex-col justify-end">
                   <div className="flex justify-between items-center">
                     <div>
@@ -343,8 +374,12 @@ const App: React.FC = () => {
                         {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
                       </h4>
                     </div>
-                    {isAdmin && photo.id.startsWith('custom') && (
-                      <button onClick={(e) => deletePhoto(photo.id, e)} className="p-3 bg-red-500/90 text-white rounded-full hover:bg-red-600 transition shadow-lg">
+                    {isAdmin && (
+                      <button 
+                        onClick={(e) => deletePhoto(photo.id, e)} 
+                        className="p-3 bg-red-500/90 text-white rounded-full hover:bg-red-600 transition shadow-lg z-20"
+                        title="Delete"
+                      >
                         <Trash2 size={16} />
                       </button>
                     )}
@@ -356,15 +391,12 @@ const App: React.FC = () => {
         </section>
       )}
 
-      {/* Footer */}
       <footer className="bg-stone-50 border-t border-stone-200 pt-32 pb-16">
         <div className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-16 mb-24">
             <div className="col-span-1 md:col-span-2">
               <h4 className="text-4xl font-serif mb-6">Mohamed El Habassi</h4>
-              <p className="text-stone-400 text-lg max-w-xl leading-relaxed mb-8">
-                {t.desc}
-              </p>
+              <p className="text-stone-400 text-lg max-w-xl leading-relaxed mb-8">{t.desc}</p>
               <div className="flex gap-6">
                 <a href="#" className="p-3 bg-white rounded-xl text-stone-400 hover:text-amber-600 border border-stone-100 shadow-sm transition"><Instagram size={20} /></a>
                 <a href="#" className="p-3 bg-white rounded-xl text-stone-400 hover:text-amber-600 border border-stone-100 shadow-sm transition"><Facebook size={20} /></a>
@@ -372,7 +404,6 @@ const App: React.FC = () => {
                 <a href="#" className="p-3 bg-white rounded-xl text-stone-400 hover:text-amber-600 border border-stone-100 shadow-sm transition"><Mail size={20} /></a>
               </div>
             </div>
-            
             <div className="bg-white p-8 rounded-[2.5rem] border border-stone-200 shadow-xl shadow-stone-900/5">
               <h5 className="text-xs font-bold uppercase tracking-[0.3em] text-stone-400 mb-6 flex items-center gap-2">
                 <Settings size={14} /> {t.photographerAccess}
@@ -384,33 +415,20 @@ const App: React.FC = () => {
               >
                 {isAdmin ? <><LogOut size={20} /> {t.exitAdmin}</> : <><Lock size={20} /> {t.ownerLogin}</>}
               </button>
-              <p className="mt-6 text-[11px] text-stone-400 text-center uppercase tracking-widest leading-loose">
-                {t.protectedArea}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center justify-between border-t border-stone-200 pt-12 gap-8">
-            <div className="flex gap-4 text-[10px] font-black tracking-widest">
-               <button onClick={() => changeLanguage('en')} className={lang === 'en' ? 'text-amber-600' : 'text-stone-300'}>EN</button>
-               <button onClick={() => changeLanguage('fr')} className={lang === 'fr' ? 'text-amber-600' : 'text-stone-300'}>FR</button>
-               <button onClick={() => changeLanguage('ar')} className={lang === 'ar' ? 'text-amber-600' : 'text-stone-300'}>AR</button>
-            </div>
-            <div className="text-[10px] text-stone-300 uppercase tracking-[0.5em] text-center md:text-right">
-              &copy; {new Date().getFullYear()} Mohamed El Habassi Photography • {t.footerNote}
             </div>
           </div>
         </div>
       </footer>
 
-      {/* Modals */}
       {selectedPhoto && (
         <PhotoDetail 
           photo={selectedPhoto} 
           lang={lang} 
           onClose={() => setSelectedPhoto(null)} 
-          isPurchased={purchasedPhotoIds.has(selectedPhoto.id)}
+          isPurchased={purchasedPhotoIds.includes(selectedPhoto.id)}
           onPurchase={handlePurchase}
+          isAdmin={isAdmin}
+          onDelete={(id) => deletePhoto(id)}
         />
       )}
       {showUpload && <UploadModal onClose={() => setShowUpload(false)} onUpload={handleUpload} />}

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Photo, Language } from '../types';
 import { getArtisticDescription } from '../services/geminiService';
-import { X, MapPin, Sparkles, Download, Lock, Unlock, CreditCard, CheckCircle2 } from 'lucide-react';
+import { X, MapPin, Sparkles, Download, Lock, Unlock, CreditCard, CheckCircle2, Trash2 } from 'lucide-react';
 import { translations } from '../data/translations';
 
 interface PhotoDetailProps {
@@ -11,9 +11,11 @@ interface PhotoDetailProps {
   onClose: () => void;
   isPurchased: boolean;
   onPurchase: (photoId: string) => void;
+  isAdmin?: boolean;
+  onDelete?: (id: string) => void;
 }
 
-const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurchased, onPurchase }) => {
+const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurchased, onPurchase, isAdmin, onDelete }) => {
   const [aiText, setAiText] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
@@ -31,7 +33,6 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
 
   const handleBuy = () => {
     setBuying(true);
-    // Simulate payment processing
     setTimeout(() => {
       onPurchase(photo.id);
       setBuying(false);
@@ -50,12 +51,23 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
 
   return (
     <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md animate-in fade-in duration-300">
-      <button 
-        onClick={onClose}
-        className="absolute top-6 right-6 text-white hover:text-stone-300 transition z-50"
-      >
-        <X size={32} />
-      </button>
+      <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
+        {isAdmin && onDelete && (
+          <button 
+            onClick={() => { if(window.confirm('Delete?')) { onDelete(photo.id); onClose(); } }}
+            className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-xl"
+            title="Delete Photo"
+          >
+            <Trash2 size={24} />
+          </button>
+        )}
+        <button 
+          onClick={onClose}
+          className="p-3 bg-white/10 text-white hover:bg-white/20 rounded-full transition"
+        >
+          <X size={32} />
+        </button>
+      </div>
 
       <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-0 bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
         <div className="h-[50vh] md:h-full relative overflow-hidden bg-stone-100 group">
@@ -65,7 +77,6 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
             className="w-full h-full object-cover select-none pointer-events-none"
           />
           
-          {/* Professional Watermark Overlay */}
           {!isPurchased && (
             <div className="absolute inset-0 pointer-events-none z-10 opacity-30 select-none overflow-hidden" 
                  style={{ 

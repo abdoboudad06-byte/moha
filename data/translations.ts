@@ -33,7 +33,8 @@ export const translations = {
     download: "Download High Res",
     purchaseSuccess: "Purchase Successful! High quality unlocked.",
     unlocked: "Unlocked",
-    locked: "Watermarked Preview"
+    locked: "Watermarked Preview",
+    clearDefaults: "Delete All Default Photos"
   },
   ar: {
     home: "الرئيسية",
@@ -68,7 +69,8 @@ export const translations = {
     download: "تحميل الصورة الأصلية",
     purchaseSuccess: "تم الشراء بنجاح! تم فك حماية الصورة.",
     unlocked: "تم فك القفل",
-    locked: "معاينة محمية"
+    locked: "معاينة محمية",
+    clearDefaults: "حذف جميع الصور الافتراضية"
   },
   fr: {
     home: "Accueil",
@@ -103,6 +105,7 @@ export const translations = {
     download: "Télécharger HD",
     purchaseSuccess: "Achat réussi ! HD déverrouillée.",
     unlocked: "Déverrouillé",
-    locked: "Aperçu Protégé"
+    locked: "Aperçu Protégé",
+    clearDefaults: "Supprimer les photos par défaut"
   }
 };
