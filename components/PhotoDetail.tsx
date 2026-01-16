@@ -19,6 +19,7 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
   const [aiText, setAiText] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
+  const [imgSrc, setImgSrc] = useState(photo.url);
   const t = translations[lang];
 
   useEffect(() => {
@@ -29,6 +30,7 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
       setLoading(false);
     };
     fetchAiText();
+    setImgSrc(photo.url);
   }, [photo, lang]);
 
   const handleBuy = () => {
@@ -42,7 +44,7 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
   const handleDownload = () => {
     if (!isPurchased) return;
     const link = document.createElement('a');
-    link.href = photo.url;
+    link.href = imgSrc;
     link.download = `Mohamed_El_Habassi_${photo.title || 'photo'}.jpg`;
     document.body.appendChild(link);
     link.click();
@@ -54,7 +56,7 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
       <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
         {isAdmin && onDelete && (
           <button 
-            onClick={() => { if(window.confirm('Delete?')) { onDelete(photo.id); onClose(); } }}
+            onClick={() => { if(window.confirm(lang === 'ar' ? 'حذف؟' : 'Delete?')) { onDelete(photo.id); onClose(); } }}
             className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-xl"
             title="Delete Photo"
           >
@@ -70,11 +72,12 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
       </div>
 
       <div className="max-w-6xl w-full grid grid-cols-1 md:grid-cols-2 gap-0 bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
-        <div className="h-[50vh] md:h-full relative overflow-hidden bg-stone-100 group">
+        <div className="h-[40vh] md:h-full relative overflow-hidden bg-stone-100 group">
           <img 
-            src={photo.url} 
+            src={imgSrc} 
             alt={photo.title} 
-            className="w-full h-full object-cover select-none pointer-events-none"
+            className="w-full h-full object-cover select-none"
+            onError={() => setImgSrc('https://images.unsplash.com/photo-1597212618440-806262de4f6b?auto=format&fit=crop&q=80&w=1200')}
           />
           
           {!isPurchased && (
@@ -101,7 +104,7 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
           </div>
         </div>
         
-        <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
+        <div className="p-8 md:p-14 flex flex-col justify-center bg-white max-h-[60vh] md:max-h-full overflow-y-auto">
           <div className="flex items-center gap-2 text-amber-600 mb-4 font-bold uppercase tracking-widest text-[10px]">
             <MapPin size={14} />
             <span>{photo.locationName}</span>
@@ -114,7 +117,7 @@ const PhotoDetail: React.FC<PhotoDetailProps> = ({ photo, lang, onClose, isPurch
           <div className="relative p-8 bg-stone-50 rounded-[2rem] border-l-4 border-amber-500 italic text-lg text-stone-700 leading-relaxed mb-10">
             <div className="flex items-center gap-2 text-stone-400 mb-4 not-italic">
               <Sparkles size={18} />
-              <span className="text-[10px] font-black uppercase tracking-tighter">AI Analysis</span>
+              <span className="text-[10px] font-black uppercase tracking-tighter">AI Curator</span>
             </div>
             {loading ? (
               <div className="h-16 flex items-center justify-center">

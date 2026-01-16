@@ -12,18 +12,7 @@ export const MOROCCO_CITIES: City[] = [
     descriptionFr: 'La Ville Rouge, abritant la vibrante place Jemaa el-Fna et des palais majestueux.',
     center: [31.6295, -7.9811],
     zoom: 12,
-    photos: [
-      {
-        id: 'tanjiya_pro_1',
-        url: 'https://images.unsplash.com/photo-1539667468225-8df6675ca531?auto=format&fit=crop&q=80&w=1200',
-        title: 'Professional Tanjiya Seller',
-        titleAr: 'بائع الطنجية المحترف',
-        titleFr: 'Vendeur de Tanjiya',
-        description: 'A professional capture of Marrakech street food culture.',
-        locationName: 'Marrakech',
-        coords: [31.6260, -7.9890]
-      }
-    ]
+    photos: [] // Removed broken default photo
   },
   {
     id: 'chefchaouen',
