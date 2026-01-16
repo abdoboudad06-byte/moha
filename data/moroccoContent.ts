@@ -14,22 +14,12 @@ export const MOROCCO_CITIES: City[] = [
     zoom: 12,
     photos: [
       {
-        id: 'm1',
-        url: 'https://images.unsplash.com/photo-1597212618440-806262de4f6b?auto=format&fit=crop&q=80&w=1200',
-        title: 'Koutoubia Dusk',
-        titleAr: 'الكتبية وقت الغروب',
-        titleFr: 'Koutoubia au Crépuscule',
-        description: 'The golden hour lighting hitting the minaret.',
-        locationName: 'Marrakech',
-        coords: [31.6237, -7.9936]
-      },
-      {
-        id: 'm2',
+        id: 'tanjiya_pro_1',
         url: 'https://images.unsplash.com/photo-1539667468225-8df6675ca531?auto=format&fit=crop&q=80&w=1200',
-        title: 'Traditional Tanjiya',
-        titleAr: 'طباخ الطنجية التقليدي',
-        titleFr: 'Cuisinier de Tanjiya',
-        description: 'Traditional cooking in the heart of Marrakech Medina.',
+        title: 'Professional Tanjiya Seller',
+        titleAr: 'بائع الطنجية المحترف',
+        titleFr: 'Vendeur de Tanjiya',
+        description: 'A professional capture of Marrakech street food culture.',
         locationName: 'Marrakech',
         coords: [31.6260, -7.9890]
       }
@@ -45,18 +35,7 @@ export const MOROCCO_CITIES: City[] = [
     descriptionFr: 'La Perle Bleue des montagnes du Rif.',
     center: [35.1688, -5.2636],
     zoom: 14,
-    photos: [
-      {
-        id: 'c1',
-        url: 'https://images.unsplash.com/photo-1543310321-72f122558661?auto=format&fit=crop&q=80&w=1200',
-        title: 'Blue Alleyway',
-        titleAr: 'زقاق أزرق',
-        titleFr: 'Ruelle Bleue',
-        description: 'Traditional steps leading into the heart of the Medina.',
-        locationName: 'Chefchaouen',
-        coords: [35.1691, -5.2625]
-      }
-    ]
+    photos: []
   },
   {
     id: 'merzouga',
@@ -68,17 +47,6 @@ export const MOROCCO_CITIES: City[] = [
     descriptionFr: 'Porte des dunes de l\'Erg Chebbi et du vaste désert du Sahara.',
     center: [31.0983, -3.9840],
     zoom: 10,
-    photos: [
-      {
-        id: 's1',
-        url: 'https://images.unsplash.com/photo-1489493585363-d69421e0dee3?auto=format&fit=crop&q=80&w=1200',
-        title: 'Dunes at Dawn',
-        titleAr: 'كثبان الفجر',
-        titleFr: 'Dunes à l\'Aube',
-        description: 'Shadows playing across the crest of Erg Chebbi.',
-        locationName: 'Sahara Desert',
-        coords: [31.1044, -3.9612]
-      }
-    ]
+    photos: []
   }
 ];

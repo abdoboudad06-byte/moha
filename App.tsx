@@ -7,7 +7,8 @@ import MoroccoMap from './components/MoroccoMap';
 import PhotoDetail from './components/PhotoDetail';
 import UploadModal from './components/UploadModal';
 import LoginModal from './components/LoginModal';
-import { Camera, Map as MapIcon, ChevronDown, Instagram, Mail, LayoutGrid, Award, MapPin, ArrowRight, Lock, Unlock, Plus, Trash2, ArrowLeft, Filter, Image as ImageIcon, Sparkle, LogOut, Settings, Globe, Facebook, MessageCircle, Eraser } from 'lucide-react';
+// Added X to the lucide-react imports
+import { Camera, Map as MapIcon, ChevronDown, Instagram, Mail, LayoutGrid, Award, MapPin, ArrowRight, Lock, Unlock, Plus, Trash2, ArrowLeft, Filter, Image as ImageIcon, Sparkle, LogOut, Settings, Globe, Facebook, MessageCircle, Eraser, AlertCircle, X } from 'lucide-react';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>('ar');
@@ -22,6 +23,7 @@ const App: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [filterCity, setFilterCity] = useState<string>('all');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const t = translations[lang];
   const isRtl = lang === 'ar';
@@ -30,33 +32,27 @@ const App: React.FC = () => {
     const savedLang = localStorage.getItem('el_habassi_lang') as Language;
     if (savedLang) setLang(savedLang);
 
-    const savedPhotos = localStorage.getItem('el_habassi_custom_photos');
-    if (savedPhotos) {
-      try {
-        setCustomPhotos(JSON.parse(savedPhotos));
-      } catch (e) {
-        console.error("Failed to load local photos");
+    // Initial load from localStorage
+    try {
+      const savedPhotosRaw = localStorage.getItem('el_habassi_custom_photos');
+      if (savedPhotosRaw) {
+        const parsed = JSON.parse(savedPhotosRaw);
+        // Validate each photo has coordinates to avoid NaN errors on map
+        if (Array.isArray(parsed)) {
+          const validPhotos = parsed.filter(p => p && p.url && Array.isArray(p.coords));
+          setCustomPhotos(validPhotos);
+        }
       }
+      
+      const savedPurchases = localStorage.getItem('el_habassi_purchases');
+      if (savedPurchases) setPurchasedPhotoIds(JSON.parse(savedPurchases));
+
+      const savedDeletedIds = localStorage.getItem('el_habassi_deleted_defaults');
+      if (savedDeletedIds) setDeletedDefaultIds(JSON.parse(savedDeletedIds));
+    } catch (e) {
+      console.warn("Storage data corrupted, resetting.");
     }
 
-    const savedPurchases = localStorage.getItem('el_habassi_purchases');
-    if (savedPurchases) {
-      try {
-        setPurchasedPhotoIds(JSON.parse(savedPurchases));
-      } catch (e) {
-        console.error("Failed to load purchases");
-      }
-    }
-
-    const savedDeletedIds = localStorage.getItem('el_habassi_deleted_defaults');
-    if (savedDeletedIds) {
-      try {
-        setDeletedDefaultIds(JSON.parse(savedDeletedIds));
-      } catch (e) {
-        console.error("Failed to load deleted IDs");
-      }
-    }
-    
     const adminStatus = localStorage.getItem('el_habassi_admin_auth');
     if (adminStatus === 'true') setIsAdmin(true);
     
@@ -73,18 +69,35 @@ const App: React.FC = () => {
   const handlePurchase = (id: string) => {
     setPurchasedPhotoIds(prev => {
       const updated = [...prev, id];
-      localStorage.setItem('el_habassi_purchases', JSON.stringify(updated));
+      try {
+        localStorage.setItem('el_habassi_purchases', JSON.stringify(updated));
+      } catch(e) {}
       return updated;
     });
   };
 
   const handleUpload = (newPhoto: Photo) => {
+    // Validate coordinates are numbers before uploading
+    if (!Array.isArray(newPhoto.coords) || isNaN(newPhoto.coords[0]) || isNaN(newPhoto.coords[1])) {
+      setErrorMsg(isRtl ? "حدث خطأ في تحديد الموقع الجغرافي." : "Geolocation error.");
+      return;
+    }
+
     setCustomPhotos(prev => {
       const updated = [newPhoto, ...prev];
-      localStorage.setItem('el_habassi_custom_photos', JSON.stringify(updated));
+      try {
+        localStorage.setItem('el_habassi_custom_photos', JSON.stringify(updated));
+        setErrorMsg(null);
+      } catch (e) {
+        // Updated error message to be more descriptive about storage limits
+        setErrorMsg(isRtl 
+          ? "الذاكرة ممتلئة. يرجى حذف بعض الصور القديمة لتتمكن من إضافة المزيد." 
+          : "Storage full. Please delete some old photos to add new ones.");
+        return prev; // Revert if failed
+      }
       return updated;
     });
-    setView('portfolio');
+    if (!errorMsg) setView('portfolio');
   };
 
   const deletePhoto = useCallback((id: string, e?: React.MouseEvent) => {
@@ -118,7 +131,7 @@ const App: React.FC = () => {
 
   const clearAllDefaults = () => {
     if (!isAdmin) return;
-    const confirmMsg = isRtl ? "هل أنت متأكد من حذف جميع صور النظام والابقاء فقط على صورك؟" : "Are you sure you want to delete all system photos and keep only yours?";
+    const confirmMsg = isRtl ? "هل أنت متأكد من حذف جميع صور النظام والابقاء فقط على أعمالك الخاصة؟" : "Are you sure you want to clear all system photos and show only your work?";
     if (!window.confirm(confirmMsg)) return;
 
     const allDefaultIds = MOROCCO_CITIES.flatMap(city => city.photos.map(p => p.id));
@@ -179,21 +192,35 @@ const App: React.FC = () => {
     <div className={`min-h-screen bg-[#FCFBF7] text-stone-900 font-sans selection:bg-amber-200 transition-all duration-300`} dir={isRtl ? 'rtl' : 'ltr'}>
       {/* Admin Status Bar */}
       {isAdmin && (
-        <div className="bg-amber-600 text-white text-[10px] font-bold uppercase tracking-[0.2em] py-2 text-center fixed top-0 w-full z-[110] flex items-center justify-between px-6 shadow-lg">
+        <div className="bg-stone-900 text-white text-[10px] font-bold uppercase tracking-[0.2em] py-2 text-center fixed top-0 w-full z-[110] flex items-center justify-between px-6 shadow-lg border-b border-white/10">
           <div className="flex items-center gap-2">
-            <Settings size={12} className="animate-spin-slow" /> {t.adminPortal} - Mohamed El Habassi
+            <Settings size={12} className="text-amber-500 animate-spin-slow" /> {t.adminPortal} - Mohamed El Habassi
           </div>
-          <button 
-            onClick={clearAllDefaults}
-            className="flex items-center gap-1 bg-white/20 hover:bg-white/40 px-3 py-1 rounded transition"
-          >
-            <Eraser size={12} /> {t.clearDefaults}
-          </button>
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={clearAllDefaults}
+              className="flex items-center gap-1 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white px-3 py-1 rounded transition border border-red-500/30"
+            >
+              <Eraser size={12} /> {t.clearDefaults}
+            </button>
+            <button onClick={() => setShowUpload(true)} className="bg-amber-600 px-3 py-1 rounded text-white flex items-center gap-1 hover:bg-amber-500 transition">
+              <Plus size={12} /> {t.addWork}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {errorMsg && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[200] bg-red-500 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+          <AlertCircle size={20} />
+          <span className="font-bold text-sm">{errorMsg}</span>
+          <button onClick={() => setErrorMsg(null)} className="ml-4 opacity-50 hover:opacity-100"><X size={16} /></button>
         </div>
       )}
 
       {/* Navbar */}
-      <nav className={`fixed top-0 w-full z-[100] transition-all duration-500 ${isAdmin ? 'mt-8' : ''} ${scrolled || view === 'portfolio' ? 'bg-white/90 backdrop-blur-md py-4 shadow-sm border-b border-stone-100' : 'bg-transparent py-6'}`}>
+      <nav className={`fixed top-0 w-full z-[100] transition-all duration-500 ${isAdmin ? 'mt-8' : ''} ${scrolled || view === 'portfolio' ? 'bg-white/95 backdrop-blur-md py-4 shadow-sm border-b border-stone-100' : 'bg-transparent py-6'}`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <div className="flex items-center gap-3 cursor-pointer" onClick={navigateToHome}>
             <div className={`p-2 rounded-full ${(scrolled || view === 'portfolio') ? 'bg-stone-900 text-white' : 'bg-white/20 text-white backdrop-blur-md'}`}>
@@ -219,15 +246,6 @@ const App: React.FC = () => {
               <span className="opacity-20">|</span>
               <button onClick={() => changeLanguage('ar')} className={`px-1.5 hover:text-amber-500 ${lang === 'ar' ? 'text-amber-500 font-black' : ''}`}>AR</button>
             </div>
-
-            {isAdmin && (
-              <button 
-                onClick={() => setShowUpload(true)}
-                className="bg-amber-600 text-white px-5 py-2 rounded-full flex items-center gap-2 hover:bg-amber-700 transition shadow-xl"
-              >
-                <Plus size={16} /> {t.addWork}
-              </button>
-            )}
           </div>
         </div>
       </nav>
@@ -274,39 +292,52 @@ const App: React.FC = () => {
               </button>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {allPhotos.slice(0, 6).map((photo) => (
-                <div 
-                  key={photo.id} 
-                  className="group cursor-pointer relative overflow-hidden rounded-3xl shadow-xl transition-all duration-700 hover:-translate-y-2"
-                  onClick={() => setSelectedPhoto(photo)}
-                >
-                  <div className="aspect-square overflow-hidden relative">
-                    <img src={photo.url} alt={photo.title} className="w-full h-full object-cover transform group-hover:scale-110 transition duration-1000" />
-                    {!purchasedPhotoIds.includes(photo.id) && (
-                      <div className="absolute inset-0 opacity-20 pointer-events-none flex items-center justify-center rotate-[-30deg]">
-                        <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 px-2">© El Habassi</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8 text-white">
-                    <div className="flex justify-between items-end w-full">
-                      <h4 className="text-2xl font-serif">
-                        {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
-                      </h4>
-                      {isAdmin && (
-                        <button 
-                          onClick={(e) => deletePhoto(photo.id, e)}
-                          className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-lg mb-2 z-20"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+            {allPhotos.length === 0 ? (
+              <div className="py-20 text-center bg-stone-50 rounded-[3rem] border-2 border-dashed border-stone-200">
+                <ImageIcon size={48} className="mx-auto text-stone-300 mb-6" />
+                <h4 className="text-xl font-serif text-stone-400 mb-2">المعرض فارغ حالياً</h4>
+                <p className="text-stone-400 text-sm mb-8 uppercase tracking-widest">قم بإضافة صورك الاحترافية من لوحة التحكم</p>
+                {isAdmin && (
+                  <button onClick={() => setShowUpload(true)} className="bg-amber-600 text-white px-8 py-3 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-amber-700 transition shadow-lg">
+                    {t.addWork}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {allPhotos.slice(0, 6).map((photo) => (
+                  <div 
+                    key={photo.id} 
+                    className="group cursor-pointer relative overflow-hidden rounded-3xl shadow-xl transition-all duration-700 hover:-translate-y-2"
+                    onClick={() => setSelectedPhoto(photo)}
+                  >
+                    <div className="aspect-square overflow-hidden relative">
+                      <img src={photo.url} alt={photo.title} className="w-full h-full object-cover transform group-hover:scale-110 transition duration-1000" />
+                      {!purchasedPhotoIds.includes(photo.id) && (
+                        <div className="absolute inset-0 opacity-20 pointer-events-none flex items-center justify-center rotate-[-30deg]">
+                          <span className="text-[10px] font-bold uppercase tracking-widest bg-white/20 px-2">© El Habassi</span>
+                        </div>
                       )}
                     </div>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-8 text-white">
+                      <div className="flex justify-between items-end w-full">
+                        <h4 className="text-2xl font-serif">
+                          {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
+                        </h4>
+                        {isAdmin && (
+                          <button 
+                            onClick={(e) => deletePhoto(photo.id, e)}
+                            className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition shadow-lg mb-2 z-20"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section id="map" className="py-32 bg-stone-900 text-white relative">
@@ -359,35 +390,42 @@ const App: React.FC = () => {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            {filteredPhotos.map((photo) => (
-              <div 
-                key={photo.id} 
-                className="group cursor-pointer relative overflow-hidden rounded-[2rem] shadow-lg transition-all duration-500 hover:shadow-2xl aspect-[4/5]"
-                onClick={() => setSelectedPhoto(photo)}
-              >
-                <img src={photo.url} alt={photo.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-8 flex flex-col justify-end">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h4 className="text-xl font-serif text-white">
-                        {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
-                      </h4>
+          {filteredPhotos.length === 0 ? (
+            <div className="py-40 text-center">
+               <ImageIcon size={64} className="mx-auto text-stone-200 mb-6" />
+               <p className="text-stone-400 font-serif text-2xl tracking-widest">لا توجد صور في هذا القسم بعد.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+              {filteredPhotos.map((photo) => (
+                <div 
+                  key={photo.id} 
+                  className="group cursor-pointer relative overflow-hidden rounded-[2rem] shadow-lg transition-all duration-500 hover:shadow-2xl aspect-[4/5]"
+                  onClick={() => setSelectedPhoto(photo)}
+                >
+                  <img src={photo.url} alt={photo.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-8 flex flex-col justify-end">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="text-xl font-serif text-white">
+                          {lang === 'ar' ? photo.titleAr || photo.title : lang === 'fr' ? photo.titleFr || photo.title : photo.title}
+                        </h4>
+                      </div>
+                      {isAdmin && (
+                        <button 
+                          onClick={(e) => deletePhoto(photo.id, e)} 
+                          className="p-3 bg-red-500/90 text-white rounded-full hover:bg-red-600 transition shadow-lg z-20"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
-                    {isAdmin && (
-                      <button 
-                        onClick={(e) => deletePhoto(photo.id, e)} 
-                        className="p-3 bg-red-500/90 text-white rounded-full hover:bg-red-600 transition shadow-lg z-20"
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 

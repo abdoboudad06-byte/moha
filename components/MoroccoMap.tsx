@@ -37,10 +37,20 @@ interface MoroccoMapProps {
   onSelectPhoto: (photo: Photo) => void;
 }
 
+// Helper to validate coordinates
+const isValidCoords = (coords: any): coords is [number, number] => {
+  return Array.isArray(coords) && 
+         coords.length === 2 && 
+         typeof coords[0] === 'number' && !isNaN(coords[0]) &&
+         typeof coords[1] === 'number' && !isNaN(coords[1]);
+};
+
 const MapUpdater = ({ center, zoom }: { center: [number, number], zoom: number }) => {
   const map = useMap();
   useEffect(() => {
-    map.flyTo(center, zoom, { duration: 1.5 });
+    if (isValidCoords(center)) {
+      map.flyTo(center, zoom, { duration: 1.5 });
+    }
   }, [center, zoom, map]);
   return null;
 };
@@ -49,14 +59,17 @@ const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, del
   const defaultCenter: [number, number] = [31.7917, -7.0926];
   const defaultZoom = 6;
 
-  // Filter custom photos that belong to the currently selected city (if any)
+  // Filter custom photos that belong to the currently selected city (if any) and have valid coords
   const currentCityCustomPhotos = selectedCity 
-    ? customPhotos.filter(p => p.locationName === selectedCity.name)
+    ? customPhotos.filter(p => p.locationName === selectedCity.name && isValidCoords(p.coords))
     : [];
 
-  // All photos to show for the current context (filtering out blacklisted ones)
+  // All photos to show for the current context (filtering out blacklisted ones and invalid coords)
   const displayedPhotos = selectedCity 
-    ? [...selectedCity.photos.filter(p => !deletedDefaultIds.has(p.id)), ...currentCityCustomPhotos]
+    ? [
+        ...selectedCity.photos.filter(p => !deletedDefaultIds.has(p.id) && isValidCoords(p.coords)), 
+        ...currentCityCustomPhotos
+      ]
     : [];
 
   return (
@@ -75,13 +88,13 @@ const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, del
         
         <ZoomControl position="bottomright" />
         
-        {selectedCity ? (
+        {selectedCity && isValidCoords(selectedCity.center) ? (
           <MapUpdater center={selectedCity.center} zoom={selectedCity.zoom} />
         ) : (
           <MapUpdater center={defaultCenter} zoom={defaultZoom} />
         )}
 
-        {MOROCCO_CITIES.map((city) => (
+        {MOROCCO_CITIES.filter(city => isValidCoords(city.center)).map((city) => (
           <Marker 
             key={city.id} 
             position={city.center} 
@@ -107,6 +120,9 @@ const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, del
 
         {displayedPhotos.map((photo) => {
           const isCustom = photo.id.startsWith('custom');
+          // Double check coords exist before accessing indices
+          if (!isValidCoords(photo.coords)) return null;
+
           // Add a tiny random jitter to coordinates so overlapping markers are slightly offset
           const jitter: [number, number] = isCustom 
             ? [photo.coords[0] + (Math.random() - 0.5) * 0.005, photo.coords[1] + (Math.random() - 0.5) * 0.005]
