@@ -1,22 +1,51 @@
 
-import React, { useState } from 'react';
-import { X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Upload, MapPin, Loader2, CheckCircle2 } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+import L from 'leaflet';
 import { Photo } from '../types';
 import { MOROCCO_CITIES } from '../data/moroccoContent';
+
+// Custom Marker for Location Picking
+const pickerIcon = new L.Icon({
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+  iconSize: [36, 36],
+  iconAnchor: [18, 36],
+});
 
 interface UploadModalProps {
   onClose: () => void;
   onUpload: (photo: Photo) => void;
 }
 
+// Internal component to handle map clicks and auto-centering
+const LocationSelector = ({ onLocationSelect, center }: { 
+  onLocationSelect: (latlng: [number, number]) => void,
+  center: [number, number] 
+}) => {
+  const map = useMap();
+
+  useEffect(() => {
+    map.flyTo(center, map.getZoom() < 10 ? 12 : map.getZoom());
+  }, [center, map]);
+
+  useMapEvents({
+    click(e) {
+      onLocationSelect([e.latlng.lat, e.latlng.lng]);
+    },
+  });
+
+  return null;
+};
+
 const UploadModal: React.FC<UploadModalProps> = ({ onClose, onUpload }) => {
   const [title, setTitle] = useState('');
   const [cityId, setCityId] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedCoords, setSelectedCoords] = useState<[number, number] | null>(null);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([31.7917, -7.0926]);
 
-  // Function to compress image before saving to overcome LocalStorage limits
   const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -26,38 +55,23 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onUpload }) => {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          // Optimized dimensions for web storage (1280px is enough for high-quality display)
           const MAX_WIDTH = 1280;
           const MAX_HEIGHT = 800;
           let width = img.width;
           let height = img.height;
-
           if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
+            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
           } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
+            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
           }
-
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
           if (!ctx) return reject('Canvas context not available');
-          
           ctx.drawImage(img, 0, 0, width, height);
-          
-          // Quality 0.7 offers the best balance between size and professional look
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-          resolve(dataUrl);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
         };
-        img.onerror = reject;
       };
-      reader.onerror = reject;
     });
   };
 
@@ -68,17 +82,26 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onUpload }) => {
         const compressed = await compressImage(file);
         setImagePreview(compressed);
       } catch (error) {
-        console.error("Compression failed", error);
-        alert("فشل في معالجة الصورة. يرجى التأكد من أن الملف صالح.");
+        alert("خطأ في معالجة الصورة.");
       } finally {
         setIsProcessing(false);
       }
     }
   };
 
+  const handleCityChange = (id: string) => {
+    setCityId(id);
+    const city = MOROCCO_CITIES.find(c => c.id === id);
+    if (city) {
+      setMapCenter(city.center);
+      // Default coords to city center if not picked yet
+      if (!selectedCoords) setSelectedCoords(city.center);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imagePreview) return;
+    if (!imagePreview || !selectedCoords) return;
 
     const selectedCity = MOROCCO_CITIES.find(c => c.id === cityId);
     
@@ -86,9 +109,9 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onUpload }) => {
       id: `custom-${Date.now()}`,
       url: imagePreview,
       title: title || "بدون عنوان",
-      description: "Custom uploaded photo",
-      locationName: selectedCity?.name || "Morocco",
-      coords: selectedCity?.center || [31.7917, -7.0926]
+      description: "صورة احترافية من تصوير محمد الحباسي",
+      locationName: selectedCity?.name || "المغرب",
+      coords: selectedCoords
     };
 
     onUpload(newPhoto);
@@ -96,80 +119,109 @@ const UploadModal: React.FC<UploadModalProps> = ({ onClose, onUpload }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in duration-300">
-        <div className="p-8 border-b border-stone-100 flex justify-between items-center">
-          <h2 className="text-2xl font-serif font-bold">إضافة صورة احترافية</h2>
-          <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full transition">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl overflow-y-auto">
+      <div className="bg-white rounded-[3rem] w-full max-w-4xl overflow-hidden shadow-2xl animate-in zoom-in duration-300 my-8">
+        <div className="p-8 border-b border-stone-100 flex justify-between items-center bg-stone-50/50">
+          <div>
+            <h2 className="text-3xl font-serif font-bold text-stone-900">إضافة عمل جديد للمعرض</h2>
+            <p className="text-stone-400 text-xs uppercase tracking-widest mt-1">حدد تفاصيل الصورة وموقعها الجغرافي بدقة</p>
+          </div>
+          <button onClick={onClose} className="p-3 hover:bg-white hover:shadow-md rounded-full transition-all">
             <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-6">
-          <div 
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(e) => { e.preventDefault(); setIsDragging(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
-            className={`relative h-64 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center transition-all ${isDragging ? 'border-amber-500 bg-amber-50' : 'border-stone-200 bg-stone-50 hover:bg-stone-100'}`}
-          >
-            {isProcessing ? (
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 size={40} className="animate-spin text-amber-600" />
-                <p className="text-stone-500 font-bold text-xs uppercase tracking-widest">جاري معالجة الصورة...</p>
-              </div>
-            ) : imagePreview ? (
-              <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover rounded-[1.4rem]" alt="Preview" />
-            ) : (
-              <>
-                <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4">
-                  <Upload className="text-amber-600" size={28} />
+        <div className="grid grid-cols-1 lg:grid-cols-2">
+          {/* Left Side: Photo & Info */}
+          <div className="p-8 space-y-6 border-r border-stone-100">
+            <div className="relative h-64 border-2 border-dashed border-stone-200 rounded-[2rem] bg-stone-50 overflow-hidden flex flex-col items-center justify-center group">
+              {isProcessing ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 size={40} className="animate-spin text-amber-600" />
+                  <p className="text-stone-400 text-[10px] font-bold uppercase tracking-widest">جاري المعالجة...</p>
                 </div>
-                <p className="text-stone-500 font-medium text-center px-4">اسحب الصورة الاحترافية هنا (مهما كان حجمها)</p>
+              ) : imagePreview ? (
+                <>
+                  <img src={imagePreview} className="absolute inset-0 w-full h-full object-cover" alt="Preview" />
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button onClick={() => setImagePreview(null)} className="bg-white text-stone-900 px-4 py-2 rounded-full text-xs font-bold shadow-xl">تغيير الصورة</button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center p-6">
+                  <Upload className="mx-auto text-amber-600 mb-4" size={40} />
+                  <p className="text-stone-500 font-medium mb-2">اسحب الصورة هنا</p>
+                  <p className="text-stone-300 text-[10px] uppercase font-bold tracking-widest">JPG, PNG - Max 10MB</p>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="absolute inset-0 opacity-0 cursor-pointer" 
+                    onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 mb-2">عنوان العمل الفني</label>
                 <input 
-                  type="file" 
-                  accept="image/*" 
-                  className="absolute inset-0 opacity-0 cursor-pointer" 
-                  onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+                  type="text" 
+                  placeholder="مثال: سحر الرمال في مرزوكة"
+                  className="w-full px-6 py-4 bg-stone-50 border border-stone-100 rounded-2xl focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none font-medium"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                 />
-              </>
-            )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 mb-2">اختيار المدينة</label>
+                <select 
+                  className="w-full px-6 py-4 bg-stone-50 border border-stone-100 rounded-2xl focus:ring-2 focus:ring-amber-500/20 transition-all outline-none cursor-pointer appearance-none"
+                  value={cityId}
+                  onChange={(e) => handleCityChange(e.target.value)}
+                >
+                  <option value="">اختر المدينة لتحديد الموقع...</option>
+                  {MOROCCO_CITIES.map(city => (
+                    <option key={city.id} value={city.id}>{city.nameAr} - {city.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-stone-400 mb-2">عنوان الصورة</label>
-              <input 
-                type="text" 
-                placeholder="مثلاً: غروب الشمس في الصويرة"
-                className="w-full px-5 py-4 bg-stone-50 border border-stone-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-stone-400 mb-2">المدينة / الموقع</label>
-              <select 
-                className="w-full px-5 py-4 bg-stone-50 border border-stone-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 transition cursor-pointer"
-                value={cityId}
-                onChange={(e) => setCityId(e.target.value)}
+          {/* Right Side: Map Location Picker */}
+          <div className="p-8 flex flex-col">
+            <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 mb-4 flex justify-between items-center">
+              <span>تحديد الموقع الدقيق على الخريطة</span>
+              {selectedCoords && <span className="text-green-600 flex items-center gap-1"><CheckCircle2 size={12}/> تم تحديد الموقع</span>}
+            </label>
+            
+            <div className="flex-grow h-80 lg:h-full rounded-[2.5rem] overflow-hidden border-4 border-stone-100 shadow-inner relative group">
+              <MapContainer 
+                center={mapCenter} 
+                zoom={6} 
+                scrollWheelZoom={false}
+                style={{ height: '100%', width: '100%' }}
               >
-                <option value="">تحديد الموقع لاحقاً</option>
-                {MOROCCO_CITIES.map(city => (
-                  <option key={city.id} value={city.id}>{city.nameAr} - {city.name}</option>
-                ))}
-              </select>
+                <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+                <LocationSelector onLocationSelect={setSelectedCoords} center={mapCenter} />
+                {selectedCoords && <Marker position={selectedCoords} icon={pickerIcon} />}
+              </MapContainer>
+              <div className="absolute bottom-4 left-4 right-4 bg-white/90 backdrop-blur-md p-3 rounded-2xl text-[10px] font-bold text-stone-500 text-center shadow-lg border border-stone-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                انقر على الخريطة لتغيير مكان "دبوس" الصورة
+              </div>
             </div>
-          </div>
 
-          <button 
-            type="submit"
-            disabled={!imagePreview || isProcessing}
-            className="w-full bg-stone-900 text-white py-5 rounded-2xl font-bold uppercase tracking-widest hover:bg-amber-600 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            نشر في المعرض
-          </button>
-        </form>
+            <button 
+              onClick={handleSubmit}
+              disabled={!imagePreview || !selectedCoords || isProcessing}
+              className="mt-8 w-full bg-stone-900 text-white py-5 rounded-[1.5rem] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all shadow-xl disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3"
+            >
+              <MapPin size={18} /> نشر في المعرض التفاعلي
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

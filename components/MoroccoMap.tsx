@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { MOROCCO_CITIES } from '../data/moroccoContent';
 import { City, Photo } from '../types';
 
-// Custom Marker Icon for Cities
+// Custom Marker Icons
 const cityIcon = new L.Icon({
   iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
   iconSize: [32, 32],
@@ -13,7 +13,6 @@ const cityIcon = new L.Icon({
   popupAnchor: [0, -32],
 });
 
-// Custom Marker Icon for Default Photos
 const photoIcon = new L.Icon({
   iconUrl: 'https://cdn-icons-png.flaticon.com/512/3342/3342137.png',
   iconSize: [24, 24],
@@ -21,13 +20,17 @@ const photoIcon = new L.Icon({
   popupAnchor: [0, -24],
 });
 
-// Special Gold Marker Icon for User's Custom Photos
 const customPhotoIcon = new L.Icon({
-  iconUrl: 'https://cdn-icons-png.flaticon.com/512/10431/10431661.png', // A gold/star marker icon
+  iconUrl: 'https://cdn-icons-png.flaticon.com/512/10431/10431661.png', 
   iconSize: [28, 28],
   iconAnchor: [14, 28],
   popupAnchor: [0, -28],
 });
+
+const MOROCCO_BOUNDS: L.LatLngBoundsExpression = [
+  [20.0, -18.0], 
+  [36.5, -0.5]    
+];
 
 interface MoroccoMapProps {
   selectedCity: City | null;
@@ -37,7 +40,6 @@ interface MoroccoMapProps {
   onSelectPhoto: (photo: Photo) => void;
 }
 
-// Helper to validate coordinates
 const isValidCoords = (coords: any): coords is [number, number] => {
   return Array.isArray(coords) && 
          coords.length === 2 && 
@@ -45,117 +47,101 @@ const isValidCoords = (coords: any): coords is [number, number] => {
          typeof coords[1] === 'number' && !isNaN(coords[1]);
 };
 
-const MapUpdater = ({ center, zoom }: { center: [number, number], zoom: number }) => {
+const MapUpdater = ({ center, zoom, bounds }: { center?: [number, number], zoom?: number, bounds?: L.LatLngBoundsExpression }) => {
   const map = useMap();
   useEffect(() => {
-    if (isValidCoords(center)) {
+    if (center && zoom && isValidCoords(center)) {
       map.flyTo(center, zoom, { duration: 1.5 });
+    } else if (bounds) {
+      map.fitBounds(bounds, { padding: [50, 50], duration: 1.5 });
     }
-  }, [center, zoom, map]);
+  }, [center, zoom, bounds, map]);
   return null;
 };
 
 const MoroccoMap: React.FC<MoroccoMapProps> = ({ selectedCity, customPhotos, deletedDefaultIds, onSelectCity, onSelectPhoto }) => {
-  const defaultCenter: [number, number] = [31.7917, -7.0926];
-  const defaultZoom = 6;
+  const defaultCenter: [number, number] = [28.8, -9.5]; 
+  const defaultZoom = 5.5; 
 
-  // Filter custom photos that belong to the currently selected city (if any) and have valid coords
-  const currentCityCustomPhotos = selectedCity 
-    ? customPhotos.filter(p => p.locationName === selectedCity.name && isValidCoords(p.coords))
-    : [];
-
-  // All photos to show for the current context (filtering out blacklisted ones and invalid coords)
-  const displayedPhotos = selectedCity 
+  const allRelevantPhotos = selectedCity 
     ? [
         ...selectedCity.photos.filter(p => !deletedDefaultIds.has(p.id) && isValidCoords(p.coords)), 
-        ...currentCityCustomPhotos
+        ...customPhotos.filter(p => p.locationName === selectedCity.name && isValidCoords(p.coords))
       ]
     : [];
 
   return (
-    <div className="w-full h-full relative z-0">
+    <div className="w-full h-full relative z-0 bg-stone-900">
       <MapContainer 
         center={defaultCenter} 
         zoom={defaultZoom} 
         zoomControl={false}
         className="w-full h-full"
+        maxBounds={MOROCCO_BOUNDS}
+        maxBoundsViscosity={1.0}
+        minZoom={5}
+        maxZoom={16}
         scrollWheelZoom={false}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          attribution='&copy; CARTO'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         
         <ZoomControl position="bottomright" />
         
-        {selectedCity && isValidCoords(selectedCity.center) ? (
+        {selectedCity ? (
           <MapUpdater center={selectedCity.center} zoom={selectedCity.zoom} />
         ) : (
-          <MapUpdater center={defaultCenter} zoom={defaultZoom} />
+          <MapUpdater bounds={MOROCCO_BOUNDS} />
         )}
 
-        {MOROCCO_CITIES.filter(city => isValidCoords(city.center)).map((city) => (
+        {MOROCCO_CITIES.map((city) => (
           <Marker 
             key={city.id} 
             position={city.center} 
             icon={cityIcon}
-            eventHandlers={{
-              click: () => onSelectCity(city),
-            }}
+            eventHandlers={{ click: () => onSelectCity(city) }}
           >
-            <Popup>
-              <div className="text-center p-1 text-stone-900">
-                <h3 className="font-bold text-lg">{city.nameAr}</h3>
-                <p className="text-sm text-stone-600">{city.name}</p>
+            <Popup className="custom-map-popup">
+              <div className="text-center p-2 min-w-[140px]">
+                <h3 className="font-bold text-lg font-serif mb-2 text-stone-900">{city.nameAr}</h3>
                 <button 
                   onClick={() => onSelectCity(city)}
-                  className="mt-2 bg-stone-900 text-white px-3 py-1 rounded text-xs hover:bg-stone-700 transition"
+                  className="w-full bg-stone-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-amber-600 transition shadow-md"
                 >
-                  استعراض الصور
+                  استكشاف الموقع
                 </button>
               </div>
             </Popup>
           </Marker>
         ))}
 
-        {displayedPhotos.map((photo) => {
-          const isCustom = photo.id.startsWith('custom');
-          // Double check coords exist before accessing indices
-          if (!isValidCoords(photo.coords)) return null;
-
-          // Add a tiny random jitter to coordinates so overlapping markers are slightly offset
-          const jitter: [number, number] = isCustom 
-            ? [photo.coords[0] + (Math.random() - 0.5) * 0.005, photo.coords[1] + (Math.random() - 0.5) * 0.005]
-            : photo.coords;
-
-          return (
-            <Marker 
-              key={photo.id} 
-              position={jitter} 
-              icon={isCustom ? customPhotoIcon : photoIcon}
-            >
-              <Popup>
-                <div className="w-48 text-stone-900">
-                  <div className="relative">
-                    <img src={photo.url} alt={photo.title} className="w-full h-24 object-cover rounded mb-2" />
-                    {isCustom && (
-                      <span className="absolute top-1 left-1 bg-amber-500 text-white text-[8px] px-1 rounded font-bold uppercase">تـصويري</span>
-                    )}
-                  </div>
-                  <h4 className="font-bold text-sm">{photo.title}</h4>
-                  <p className="text-xs text-stone-500 mb-2">{photo.locationName}</p>
-                  <button 
-                    onClick={() => onSelectPhoto(photo)}
-                    className="w-full bg-amber-600 text-white py-1 rounded text-xs hover:bg-amber-700 transition"
-                  >
-                    عرض كامل
-                  </button>
+        {allRelevantPhotos.map((photo) => (
+          <Marker 
+            key={photo.id} 
+            position={photo.coords} 
+            icon={photo.id.startsWith('custom') ? customPhotoIcon : photoIcon}
+          >
+            <Popup>
+              <div className="w-56 text-stone-900 p-1">
+                <div className="relative h-32 mb-3 rounded-xl overflow-hidden shadow-sm">
+                   <img src={photo.url} className="w-full h-full object-cover" />
                 </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+                <h4 className="font-bold text-sm mb-3 px-1">{photo.title}</h4>
+                <button 
+                  onClick={() => onSelectPhoto(photo)}
+                  className="w-full bg-amber-600 text-white py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-stone-900 transition"
+                >
+                  عرض التفاصيل
+                </button>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
       </MapContainer>
+      
+      <div className="absolute inset-0 pointer-events-none border-[60px] border-stone-950/20 rounded-[2.5rem]"></div>
     </div>
   );
 };
